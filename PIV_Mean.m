@@ -2,7 +2,7 @@ clear,clc
 format long
 
 % Getting path to datasets
-pathToFolder = './AMT00HighReAll';
+pathToFolder = 'folderpath';
 files = dir( fullfile(pathToFolder,'*.dat') );
 
 % Reading all files
@@ -10,14 +10,14 @@ NFiles = numel(files);
 dataV = cell(NFiles,1); %set up the length of the dataV
 
 % Initialize the sum matrix
-sumU=0.0;
-sumV=0.0;
+sumU= 0.0;
+sumV= 0.0;
 
 disp('<strong>Reading files...</strong>')
 for i=1:numel(files)
     fid = fopen(fullfile(pathToFolder,files(i).name), 'rt');
-    H = textscan(fid, '%s', 0, 'Delimiter','\n'); 
-    lineformat = repmat('%f',1,4);
+    H = textscan(fid, '%s', 0, 'Delimiter','\n'); % number of lines to skip
+    lineformat = repmat('%f',1,4); % number of unique columns
     C = textscan(fid, lineformat, 'delimiter', ',','HeaderLines', 1, 'CollectOutput',1);
     fclose(fid);
  
@@ -46,14 +46,42 @@ UMean= reshape(Umean,[shapeX(1),shapeY(1)]);
 VMean= reshape(Vmean, [shapeX(1),shapeY(1)]);
 disp('<strong>Mean Calculation Completed!</strong>');
 
-%% Calculating velocity fluctuations
+%% Velcity fluctuations for U and V
+U_flucs = []; % This needs to be an array of fluctuations
+V_flucs = []; 
 
-% for k= 1:NFiles
-%     UPrime= (dataV{k}(:,1)) - Umean(k); 
-%     VPrime= (dataV{k}(:,2)) - Vmean(k);
-% end
-% 
-% mean(UPrime)
+% Initializing the Urms and Vrms
+Urms = 0;
+Vrms = 0;
+
+% Initialzing the UVres
+UVres = 0;
+
+for k=1:NFiles
+   % Calculating the velocity fluctuations for individual images
+   U_flucs = [U_flucs, (dataV{k}(:,1)-Umean)]; 
+   V_flucs = [V_flucs, (dataV{k}(:,2)-Vmean)];
+
+   % calculating the root mean squares of U, V
+   Urms =(dataV{k}(:,1)-Umean).^2 + Urms;
+   Vrms =(dataV{k}(:,2)-Vmean).^2 + Vrms;
+
+   % calculating the reynold stress, UV
+   UVres=(dataV{k}(:,1)-Umean).*(dataV{k}(:,2)-Vmean)+UVres;
+end    
+
+% Calculating Urms and Vrms
+Urms = sqrt(Urms/NFiles);
+Vrms = sqrt(Vrms/NFiles);
+disp('RMS completed!');
+
+% Calculating UVres
+UVres = UVres/NFiles;
+disp('Reynold stress completed!');
+
+% calculating the velocity fluctuations for all images
+Uprime = U_flucs/NFiles;
+Vprime = V_flucs/NFiles;
 
 %% Calculate vorticity
 % Initialize dvdx and dudy matrices
@@ -89,11 +117,11 @@ w= reshape(w,size(Umean));
 
 %% Export to TECPLOT format 
 disp('Working on results files...');
-PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean w];
+PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean];
 filename = 'PIV_Results.dat';
 fid = fopen(filename, 'w');
 fprintf(fid, 'TITLE=%s\n', filename);
-fprintf(fid, 'VARIABLES= X, Y, U, V Wz \n');
+fprintf(fid, 'VARIABLES= X, Y, U, V \n');
 fprintf(fid, 'ZONE  I= %d  J= %d F=POINT\n', shapeX(1), shapeY(1));
 dlmwrite(filename, PIVStats, '-append', 'delimiter', ' ');
 fclose(fid);
