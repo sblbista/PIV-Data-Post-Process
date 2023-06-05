@@ -1,4 +1,4 @@
-clear,clc
+clear;clc; close all;
 format long
 
 % Getting path to datasets
