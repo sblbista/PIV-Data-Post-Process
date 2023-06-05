@@ -2,7 +2,7 @@ clear,clc
 format long
 
 % Getting path to datasets
-pathToFolder = 'folderpath';
+pathToFolder = './Slot_Output';
 files = dir( fullfile(pathToFolder,'*.dat') );
 
 % Reading all files
@@ -10,14 +10,15 @@ NFiles = numel(files);
 dataV = cell(NFiles,1); %set up the length of the dataV
 
 % Initialize the sum matrix
-sumU= 0.0;
-sumV= 0.0;
+sumU=0.0;
+sumV=0.0;
 
 disp('<strong>Reading files...</strong>')
+%% Read data and calculate the sum
 for i=1:numel(files)
     fid = fopen(fullfile(pathToFolder,files(i).name), 'rt');
-    H = textscan(fid, '%s', 0, 'Delimiter','\n'); % number of lines to skip
-    lineformat = repmat('%f',1,4); % number of unique columns
+    H = textscan(fid, '%s', 5, 'Delimiter','\n');  % Header lines to skip
+    lineformat = repmat('%f',1,5); % Number of unique columns
     C = textscan(fid, lineformat, 'delimiter', ',','HeaderLines', 1, 'CollectOutput',1);
     fclose(fid);
  
@@ -25,15 +26,16 @@ for i=1:numel(files)
     dataV{i} = [C{1,1}(:,3) C{1,1}(:,4)];
     sumU= sumU + dataV{i}(:,1);
     sumV= sumV + dataV{i}(:,2);
+    u= dataV{i}(:,1);
+    v= dataV{i}(:,2);
 end 
-
-% Getting shape of x and y
-shapeX= size(unique(C{1,1}(:,1)));
-shapeY= size(unique(C{1,1}(:,2)));
-
 % Getting y data points
 y= unique(C{1,1}(:,2));
 x= unique(C{1,1}(:,1));
+
+% Getting shape of x and y
+rows= size(x,1);
+cols= size(y,1);
 
 disp('<strong>Calculating PIV statistics...</strong>')
 
@@ -41,12 +43,14 @@ disp('<strong>Calculating PIV statistics...</strong>')
 Umean=sumU/NFiles;
 Vmean=sumV/NFiles;
 
-% Reshaping mean U and V into (216,86) matrix
-UMean= reshape(Umean,[shapeX(1),shapeY(1)]);
-VMean= reshape(Vmean, [shapeX(1),shapeY(1)]);
+% Reshaping mean U and V into (x,y) matrix
+UMean= reshape(Umean,[rows,cols]);
+VMean= reshape(Vmean, [rows,cols]);
 disp('<strong>Mean Calculation Completed!</strong>');
+x_y_size= size(UMean);
+tecSize= size(Umean);
 
-%% Velcity fluctuations for U and V
+%% Velocity fluctuations for U and V
 U_flucs = []; % This needs to be an array of fluctuations
 V_flucs = []; 
 
@@ -85,48 +89,65 @@ Vprime = V_flucs/NFiles;
 
 %% Calculate vorticity
 % Initialize dvdx and dudy matrices
-dvdx= zeros(size(UMean));
-dudy= zeros(size(UMean));
+u=reshape(u,[rows,cols]);
+v=reshape(v,[rows,cols]);
 
 dx= x(2) - x(1);
 dy= y(2) - y(1);
 
+%% Calculate the velocity gradient tensor and Swirling Strength 
+dvdx= zeros(size(x_y_size));
+dudy= zeros(size(x_y_size));
+dvdy= zeros(size(x_y_size));
+dudx= zeros(size(x_y_size));
 
+[dudx, dudy]= gradient(UMean,dx,dy);
+[dvdx, dvdy]= gradient(UMean,dx,dy);
+wz= (dvdx - dudy);
 for i= 1:numel(x)
     for j= 1:numel(y)
-        if i==1
-            % Implement Forward Difference Scheme
-            dudy(i,j)= (UMean(i+1,j) - UMean(i,j)) / (dy);
-            dvdx(i,j)= (VMean(i+1,j) - VMean(i,j)) / (dx);
-        elseif i==numel(x)
-            % Implement Backward Difference Scheme
-            dudy(i,j)= (UMean(i,j) - UMean(i-1,j)) / (dy);
-            dvdx(i,j)= (VMean(i,j) - VMean(i-1,j)) / (dx);
-        else
-            % Central differnce method
-            dudy(i,j)= (UMean(i+1,j) - UMean(i-1,j)) / (2 * dy);
-            dvdx(i,j)= (VMean(i+1,j) - VMean(i-1,j)) / (2 * dx);
-        end
+        % Velocity Gradient Tesor
+        D2D= [dudx(i,j) dudy(i,j); dvdx(i,j) dvdy(i,j)];
+        temp_eig= eig(D2D);
+        lambda(i,j)= imag(temp_eig(1,1));
+        % Swirling Strength
+        lambda1(i,j)=lambda(i,j)*sign(wz(i,j));
+        P(i,j)= trace(D2D); % 0 for incompressible flow 
+        % Q-Criterion
+        Q(i,j)= -(dudy(i,j).*dvdx(i,j)) + (dudx(i,j).*dvdy(i,j));
     end
 end
 
 % Vorticity
-w= dvdx - dudy;
 
-w= reshape(w,size(Umean));
+lambda1= lambda1';
+Wz= reshape(wz,tecSize);
+lambda1R= reshape(lambda1,tecSize);
 
-%% Export to TECPLOT format 
-disp('Working on results files...');
-PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean];
-filename = 'PIV_Results.dat';
-fid = fopen(filename, 'w');
-fprintf(fid, 'TITLE=%s\n', filename);
-fprintf(fid, 'VARIABLES= X, Y, U, V \n');
-fprintf(fid, 'ZONE  I= %d  J= %d F=POINT\n', shapeX(1), shapeY(1));
-dlmwrite(filename, PIVStats, '-append', 'delimiter', ' ');
-fclose(fid);
+tec= input('Write data to TECPLOT? [0/1]');
+if tec==1
+    %% Export to TECPLOT format 
+    disp('Working on results files...');
+    PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean Wz lambda1R];
+    filename = 'Slot0.dat';
+    fid = fopen(filename, 'w');
+    fprintf(fid, 'TITLE=%s\n', filename);
+    fprintf(fid, "VARIABLES= X, Y, U, V VORT LAMBDA_CI \n");
+    fprintf(fid, 'ZONE  I= %d  J= %d F=POINT\n', rows, cols);
+    dlmwrite(filename, PIVStats, '-append', 'delimiter', ' ');
+    fclose(fid);
+    
+    disp('<strong>PIV statistics completed!</strong>');
+elseif tec==0
+end
 
-disp('<strong>PIV statistics completed</strong>');
+flag= input('Write data as CSV file? [0/1]');
+
+if flag==1
+    %% Write all the variables as CSV file
+    outputPIV= [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean Urms Vrms UVres];
+    csvwrite('outputPIV.csv',outputPIV);
+end
 
 
 
