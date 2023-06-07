@@ -3,7 +3,7 @@ clear,clc
 format long
 
 % Getting path to datasets
-pathToFolder = './Slot_Output';
+pathToFolder = './Slot_Output'; % Enter path to folder
 files = dir( fullfile(pathToFolder,'*.dat') );
 
 % Reading all files
@@ -93,6 +93,12 @@ uuStress= (Urms)/NFiles;
 vvStress= (Vrms)/NFiles;
 uvStress= UVres/NFiles;
 disp('<strong>REYNOLDS STRESS CALCULATION COMPLETE!</strong>');
+
+% calculate Turbulent Kinetic Energy
+TKE= 0.5 * (uuStress + vvStress);
+
+
+
 %% Calculate vorticity
 % Initialize dvdx and dudy matrices
 u=reshape(u,[rows,cols]);
@@ -110,6 +116,10 @@ dudx= zeros(size(x_y_size));
 [dudx, dudy]= gradient(UMean,dx,dy); % Change UMean to u (instantenous velocity)
 [dvdx, dvdy]= gradient(VMean,dx,dy); % Change VMean to v (instantenous velocity)
 
+
+% Calculate Turbulent Production
+Prod= - (reshape(uuStress,[rows,cols]).*dudx + reshape(uvStress,[rows,cols]).*dvdx + reshape(uvStress,[rows,cols]).*dudy + reshape(vvStress,[rows,cols]).*dvdy);
+Prod= reshape(Prod,tecSize);
 % Calculate Vorticity
 wz= (dvdx - dudy);
 
@@ -137,11 +147,11 @@ tec= input('Write data to TECPLOT? [0/1]');
 if tec==1
     %% Export to TECPLOT format 
     disp('Working on results files...');
-    PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean uuStress vvStress uvStress Wz lambda1R];
+    PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean uuStress vvStress uvStress TKE Prod Wz lambda1R];
     filename = 'Slot0.dat';
     fid = fopen(filename, 'w');
     fprintf(fid, 'TITLE=%s\n', filename);
-    fprintf(fid, "VARIABLES= X, Y, U, V U'U' V'V' U'V' VORT LAMBDA_CI \n");
+    fprintf(fid, "VARIABLES= X, Y, U, V U'U' V'V' U'V' TKE PRODUCTION VORT LAMBDA_CI \n");
     fprintf(fid, 'ZONE  I= %d  J= %d F=POINT\n', rows, cols);
     dlmwrite(filename, PIVStats, '-append', 'delimiter', ' ');
     fclose(fid);
@@ -170,5 +180,8 @@ if flag==1
         end
     end
 end
+
+
+    
 
 
