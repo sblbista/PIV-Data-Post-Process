@@ -1,4 +1,5 @@
-clear;clc; close all;
+%% This code calculates the turbulent quantities from experimental data %% 
+clear,clc
 format long
 
 % Getting path to datasets
@@ -40,19 +41,19 @@ cols= size(y,1);
 disp('<strong>Calculating PIV statistics...</strong>')
 
 %% Calculating mean velocities for the datasets
-Umean=sumU/NFiles;
-Vmean=sumV/NFiles;
+Umean= sumU/NFiles;
+Vmean= sumV/NFiles;
 
 % Reshaping mean U and V into (x,y) matrix
 UMean= reshape(Umean,[rows,cols]);
 VMean= reshape(Vmean, [rows,cols]);
-disp('<strong>Mean Calculation Completed!</strong>');
+disp('<strong>MEAN VELOCITY CALCULATION COMPLETE!</strong>');
 x_y_size= size(UMean);
 tecSize= size(Umean);
 
 %% Velocity fluctuations for U and V
-U_flucs = []; % This needs to be an array of fluctuations
-V_flucs = []; 
+U_flucs_sum = 0;%[]; % This needs to be an array of fluctuations
+V_flucs_sum = 0;%[]; 
 
 % Initializing the Urms and Vrms
 Urms = 0;
@@ -63,30 +64,35 @@ UVres = 0;
 
 for k=1:NFiles
    % Calculating the velocity fluctuations for individual images
-   U_flucs = [U_flucs, (dataV{k}(:,1)-Umean)]; 
-   V_flucs = [V_flucs, (dataV{k}(:,2)-Vmean)];
+    U_flucs_sum= (dataV{k}(:,1)-Umean) + U_flucs_sum;
+    V_flucs_sum= (dataV{k}(:,2)-Vmean) + V_flucs_sum;
 
    % calculating the root mean squares of U, V
    Urms =(dataV{k}(:,1)-Umean).^2 + Urms;
    Vrms =(dataV{k}(:,2)-Vmean).^2 + Vrms;
 
    % calculating the reynold stress, UV
-   UVres=(dataV{k}(:,1)-Umean).*(dataV{k}(:,2)-Vmean)+UVres;
+   UVres= (dataV{k}(:,1)-Umean).*(dataV{k}(:,2)-Vmean)+ UVres;
 end    
 
 % Calculating Urms and Vrms
 Urms = sqrt(Urms/NFiles);
 Vrms = sqrt(Vrms/NFiles);
-disp('RMS completed!');
+disp('<strong>RMS CALCULATION COMPLETE!</strong>');
 
 % Calculating UVres
 UVres = UVres/NFiles;
-disp('Reynold stress completed!');
+
 
 % calculating the velocity fluctuations for all images
-Uprime = U_flucs/NFiles;
-Vprime = V_flucs/NFiles;
+Uprime = U_flucs_sum/NFiles;
+Vprime = V_flucs_sum/NFiles;
 
+% Normal Reynolds Stress
+uuStress= (Urms)/NFiles;
+vvStress= (Vrms)/NFiles;
+uvStress= UVres/NFiles;
+disp('<strong>REYNOLDS STRESS CALCULATION COMPLETE!</strong>');
 %% Calculate vorticity
 % Initialize dvdx and dudy matrices
 u=reshape(u,[rows,cols]);
@@ -101,9 +107,12 @@ dudy= zeros(size(x_y_size));
 dvdy= zeros(size(x_y_size));
 dudx= zeros(size(x_y_size));
 
-[dudx, dudy]= gradient(UMean,dx,dy);
-[dvdx, dvdy]= gradient(UMean,dx,dy);
+[dudx, dudy]= gradient(UMean,dx,dy); % Change UMean to u (instantenous velocity)
+[dvdx, dvdy]= gradient(VMean,dx,dy); % Change VMean to v (instantenous velocity)
+
+% Calculate Vorticity
 wz= (dvdx - dudy);
+
 for i= 1:numel(x)
     for j= 1:numel(y)
         % Velocity Gradient Tesor
@@ -118,7 +127,7 @@ for i= 1:numel(x)
     end
 end
 
-% Vorticity
+disp('<strong>VORTICITY CALCULATION COMPLETE!</strong>')
 
 lambda1= lambda1';
 Wz= reshape(wz,tecSize);
@@ -128,11 +137,11 @@ tec= input('Write data to TECPLOT? [0/1]');
 if tec==1
     %% Export to TECPLOT format 
     disp('Working on results files...');
-    PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean Wz lambda1R];
+    PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean uuStress vvStress uvStress Wz lambda1R];
     filename = 'Slot0.dat';
     fid = fopen(filename, 'w');
     fprintf(fid, 'TITLE=%s\n', filename);
-    fprintf(fid, "VARIABLES= X, Y, U, V VORT LAMBDA_CI \n");
+    fprintf(fid, "VARIABLES= X, Y, U, V U'U' V'V' U'V' VORT LAMBDA_CI \n");
     fprintf(fid, 'ZONE  I= %d  J= %d F=POINT\n', rows, cols);
     dlmwrite(filename, PIVStats, '-append', 'delimiter', ' ');
     fclose(fid);
@@ -141,15 +150,25 @@ if tec==1
 elseif tec==0
 end
 
+% Write the variables to a file
 flag= input('Write data as CSV file? [0/1]');
 
 if flag==1
     %% Write all the variables as CSV file
-    outputPIV= [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean Urms Vrms UVres];
-    csvwrite('outputPIV.csv',outputPIV);
+    M= [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean Urms Vrms UVres];
+    csvwrite('outputPIV.csv',M);
 end
 
-
-
+% Perform double averging of the mean quantities
+if flag==1
+    [sm1 sm2]=size(M(:,1));
+    [sm3 sm4]=size(M(1,:));
+    for i=1:sm4
+        M1=reshape(M(:,i),[r2,r1]);
+        for j=1:r2
+            M2(j,i)=mean(M1(j,:));
+        end
+    end
+end
 
 
