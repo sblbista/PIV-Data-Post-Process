@@ -3,9 +3,6 @@ clc; clear; close all;
 
 tic()
 data= readtable('SCC000Z00B_Processed/Right_Processed_1950.dat'); % SCC000Z00B_Processed/Right_Processed_0117.dat Jet_0001.txt
-% Djet= 0.01;
-% y0= 0.025;
-% Ujet= 3;
 data= data{:,1:6};
 X= data(:,1);
 Y= data(:,2);
