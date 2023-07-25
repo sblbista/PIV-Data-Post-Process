@@ -11,8 +11,8 @@ NFiles = numel(files);
 dataV = cell(NFiles,1); %set up the length of the dataV
 
 % Initialize the sum matrix
-sumU=0.0;
-sumV=0.0;
+sumU= 0.0;
+sumV= 0.0;
 
 disp('<strong>Reading files...</strong>')
 %% Read data and calculate the sum
@@ -183,5 +183,4 @@ end
 
 
     
-
 
