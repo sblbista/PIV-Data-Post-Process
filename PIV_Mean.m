@@ -1,14 +1,28 @@
+tic()
 %% This code calculates the turbulent quantities from experimental data %% 
 clear,clc
 format long
 
+
 % Getting path to datasets
-pathToFolder = './Slot_Output'; % Enter path to folder
-files = dir( fullfile(pathToFolder,'*.dat') );
+disp("Folder MUST be in current directory")
+folderName = input("Enter folder name: ", "s");
+pathToFolder = strcat("./", folderName);
+
+% Check if folder name exists
+if ~exist(pathToFolder, "dir")
+    disp("Folder does NOT exist or cannot be found in the current directory")
+else
+
+    files = dir( fullfile(pathToFolder,'*.dat') );
 
 % Reading all files
 NFiles = numel(files);
 dataV = cell(NFiles,1); %set up the length of the dataV
+
+% Reference values for X and Y coordinates
+Xedge = input("X-coordinate reference point: ");
+Yedge = input("Y-coordinate reference point: ");
 
 % Initialize the sum matrix
 sumU= 0.0;
@@ -52,12 +66,12 @@ x_y_size= size(UMean);
 tecSize= size(Umean);
 
 %% Velocity fluctuations for U and V
-U_flucs_sum = 0;%[]; % This needs to be an array of fluctuations
-V_flucs_sum = 0;%[]; 
+U_flucs_sum = 0; 
+V_flucs_sum = 0;  
 
-% Initializing the Urms and Vrms
-Urms = 0;
-Vrms = 0;
+% Initializing the u'u' and v'v'
+UPrime2 = 0;
+VPrime2 = 0;
 
 % Initialzing the UVres
 UVres = 0;
@@ -68,20 +82,17 @@ for k=1:NFiles
     V_flucs_sum= (dataV{k}(:,2)-Vmean) + V_flucs_sum;
 
    % calculating the root mean squares of U, V
-   Urms =(dataV{k}(:,1)-Umean).^2 + Urms;
-   Vrms =(dataV{k}(:,2)-Vmean).^2 + Vrms;
+   UPrime2 =(dataV{k}(:,1)-Umean).^2 + UPrime2;
+   VPrim2 =(dataV{k}(:,2)-Vmean).^2 + VPrime2;
 
    % calculating the reynold stress, UV
    UVres= (dataV{k}(:,1)-Umean).*(dataV{k}(:,2)-Vmean)+ UVres;
 end    
 
 % Calculating Urms and Vrms
-Urms = sqrt(Urms/NFiles);
-Vrms = sqrt(Vrms/NFiles);
+URMS = sqrt(Urms/NFiles);
+VRMS = sqrt(Vrms/NFiles);
 disp('<strong>RMS CALCULATION COMPLETE!</strong>');
-
-% Calculating UVres
-UVres = UVres/NFiles;
 
 
 % calculating the velocity fluctuations for all images
@@ -89,9 +100,12 @@ Uprime = U_flucs_sum/NFiles;
 Vprime = V_flucs_sum/NFiles;
 
 % Normal Reynolds Stress
-uuStress= (Urms)/NFiles;
-vvStress= (Vrms)/NFiles;
+uuStress= (UPrime2)/NFiles;
+vvStress= (VPrime2)/NFiles;
+
+% Reynolds Shear Stress
 uvStress= UVres/NFiles;
+
 disp('<strong>REYNOLDS STRESS CALCULATION COMPLETE!</strong>');
 
 % calculate Turbulent Kinetic Energy
@@ -113,45 +127,30 @@ dudy= zeros(size(x_y_size));
 dvdy= zeros(size(x_y_size));
 dudx= zeros(size(x_y_size));
 
+
 [dudx, dudy]= gradient(UMean,dx,dy); % Change UMean to u (instantenous velocity)
 [dvdx, dvdy]= gradient(VMean,dx,dy); % Change VMean to v (instantenous velocity)
 
 
 % Calculate Turbulent Production
-Prod= - (reshape(uuStress,[rows,cols]).*dudx + reshape(uvStress,[rows,cols]).*dvdx + reshape(uvStress,[rows,cols]).*dudy + reshape(vvStress,[rows,cols]).*dvdy);
-Prod= reshape(Prod,tecSize);
+Puu= -2*(reshape(uuStress,[rows,cols]).*dudx + reshape(uvStress,[rows,cols]).*dudy);
+Pvv= -2*(reshape(vvStress,[rows,cols]).*dvdy + reshape(uvStress,[rows,cols]).*dvdx);
+ProdTKE= -0.5*(Puu + Pvv);
+
+ProdTKE= reshape(ProdTKE,tecSize);
 % Calculate Vorticity
 wz= (dvdx - dudy);
-
-for i= 1:numel(x)
-    for j= 1:numel(y)
-        % Velocity Gradient Tesor
-        D2D= [dudx(i,j) dudy(i,j); dvdx(i,j) dvdy(i,j)];
-        temp_eig= eig(D2D);
-        lambda(i,j)= imag(temp_eig(1,1));
-        % Swirling Strength
-        lambda1(i,j)=lambda(i,j)*sign(wz(i,j));
-        P(i,j)= trace(D2D); % 0 for incompressible flow 
-        % Q-Criterion
-        Q(i,j)= -(dudy(i,j).*dvdx(i,j)) + (dudx(i,j).*dvdy(i,j));
-    end
-end
-
-disp('<strong>VORTICITY CALCULATION COMPLETE!</strong>')
-
-lambda1= lambda1';
-Wz= reshape(wz,tecSize);
-lambda1R= reshape(lambda1,tecSize);
 
 tec= input('Write data to TECPLOT? [0/1]');
 if tec==1
     %% Export to TECPLOT format 
     disp('Working on results files...');
-    PIVStats = [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean uuStress vvStress uvStress TKE Prod Wz lambda1R];
-    filename = 'Slot0.dat';
+    PIVStats = [C{1,1}(:,1)+ Xedge C{1,1}(:,2)+ Yedge Umean Vmean uuStress vvStress uvStress URMS VRMS TKE ProdTKE];
+    fName= input('Enter file name to export: ',"s");
+    filename = [fName,'.dat'];
     fid = fopen(filename, 'w');
     fprintf(fid, 'TITLE=%s\n', filename);
-    fprintf(fid, "VARIABLES= X, Y, U, V U'U' V'V' U'V' TKE PRODUCTION VORT LAMBDA_CI \n");
+    fprintf(fid, "VARIABLES= X, Y, U, V U'U' V'V' U'V' URMS VRMS TKE PRODUCTION \n");
     fprintf(fid, 'ZONE  I= %d  J= %d F=POINT\n', rows, cols);
     dlmwrite(filename, PIVStats, '-append', 'delimiter', ' ');
     fclose(fid);
@@ -165,22 +164,20 @@ flag= input('Write data as CSV file? [0/1]');
 
 if flag==1
     %% Write all the variables as CSV file
-    M= [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean Urms Vrms UVres];
+    M= [C{1,1}(:,1) C{1,1}(:,2) Umean Vmean URMS VRMS UVres];
     csvwrite('outputPIV.csv',M);
 end
 
 % Perform double averging of the mean quantities
 if flag==1
-    [sm1 sm2]=size(M(:,1));
-    [sm3 sm4]=size(M(1,:));
+    [sm1, sm2]=size(M(:,1));
+    [sm3, sm4]=size(M(1,:));
     for i=1:sm4
-        M1=reshape(M(:,i),[r2,r1]);
+        M1=reshape(M(:,i),[cols,rows]);
         for j=1:r2
             M2(j,i)=mean(M1(j,:));
         end
     end
 end
-
-
-    
-
+end
+toc()
