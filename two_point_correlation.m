@@ -1,7 +1,7 @@
-%% Spatial Two-point correlation
+%% This code computes the Spatial Two-point correlation of PIV data
 clc; clear; close all;
 
-pathToFolder = 'HCG050_NEAR_ANALYZED'; % HCG050_NEAR_ANALYZED
+pathToFolder = 'foldername'; 
 files = dir( fullfile(pathToFolder,'*.dat') );
 NFiles = numel(files);
 %read all files
