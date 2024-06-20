@@ -1,6 +1,7 @@
 %% 
 % This code loads the CSV file exported from STAR-CCM+ and 
-% triangulates the data using Delaunay method
+% triangulates the data using Delaunay method 
+% Developed by Sabal Bista
 %%
 clear; clc;
 % Specify the directory where your CSV files are located
