@@ -1,4 +1,4 @@
-# Developed by John Boamah
+# Developed by John Boamah (joboa)
 import os
 import shutil
 
