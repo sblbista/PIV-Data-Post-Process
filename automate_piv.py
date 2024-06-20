@@ -1,3 +1,4 @@
+# Developed by John Boamah
 import os
 import shutil
 
