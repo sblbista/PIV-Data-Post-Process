@@ -6,10 +6,13 @@ directory = './TEST2';
 
 % List all CSV files in the directory
 fileList = dir(fullfile(directory, '*.csv'));
-u= cell(1,numel(fileList));
-v= cell(1,numel(fileList));
+skip= 2;
+nFiles= floor(numel(fileList)./skip); 
+u= cell(1,nFiles);
+v= cell(1,nFiles);
 
-for i = 1:numel(fileList)
+% Load data
+for i = 1:nFiles
     filename = fullfile(directory, fileList(i).name);
     
     % Read the CSV file, skipping the header row
@@ -19,12 +22,13 @@ for i = 1:numel(fileList)
     x = data(:, 11); % x coordinates 
     y = data(:, 12); % y coordinates 
     z = data(:, 13); % z coordinates 
+
     disp(['Loading timestep: ' num2str(i) ]);
 end
 
 vertices= cat(2,x,y);
 
-% Select the range of region 
+% Select the region 
 X_min = 0.0;
 X_max = 0.254;
 Y_min = 0;
@@ -67,11 +71,11 @@ y1= linspace(min(y_round),max(y_round),J);
 
 [xq,yq]= meshgrid(x1,y1);
 
-[nx ny]=size(xq);
-F= cell(1,numel(fileList));
+[nx, ny]=size(xq);
+% F= cell(1,numel(fileList));
 
 
-for k=1:numel(fileList)
+for k=1:nFiles
 
     F1{k}= scatteredInterpolant(vertices(:,1),vertices(:,2),u_all(:,k)); % griddata(vertices(:,1),vertices(:,2),u_all(:,k),xq,yq);
     u_grid= F1{k}(xq,yq);
@@ -105,7 +109,7 @@ elseif animate==0
 end
 
 % Save interpolated MAT file
-save_inst= 1; % input('Save interpolated instantenous data in a MAT file? [0/1] ');
+save_inst= input('Save interpolated instantenous data in a MAT file? [0/1] ');
 if save_inst==1
     save('inst_data_interpolated.mat','u_temp','v_temp','xq','yq','-v7.3');
     % data= load('inst_data_interpolated.mat');
@@ -117,8 +121,8 @@ sumUi= 0; sumUj= 0; nFiles= size(u_temp,3);
 for i= 1:nFiles
     sumUi= sumUi + u_temp1(:,i);
     sumUj= sumUj + v_temp1(:,i);
-    i=i+1;
 end
+
 Umean= sumUi/nFiles;
 Vmean= sumUj/nFiles;
 
